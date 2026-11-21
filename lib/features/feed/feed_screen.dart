@@ -155,12 +155,14 @@ class _FeedBodyState extends State<_FeedBody> {
     SwipeAction action,
     int matchPercent,
   ) async {
+    var failedAt = 'starting swipe';
     try {
       final currentUid = widget.user.uid;
       final userDoc = FirebaseFirestore.instance
           .collection('users')
           .doc(currentUid);
 
+      failedAt = 'saving your swipe';
       await userDoc.collection('swipes').doc(profile.uid).set({
         'direction': action.name,
         'matchPercent': matchPercent,
@@ -172,6 +174,7 @@ class _FeedBodyState extends State<_FeedBody> {
         return;
       }
 
+      failedAt = 'reading the other user swipe';
       final otherSwipe = await FirebaseFirestore.instance
           .collection('users')
           .doc(profile.uid)
@@ -190,11 +193,13 @@ class _FeedBodyState extends State<_FeedBody> {
         'createdAt': FieldValue.serverTimestamp(),
       };
 
+      failedAt = 'creating the main match';
       await FirebaseFirestore.instance
           .collection('connections')
           .doc(connectionId)
           .set(connectionData, SetOptions(merge: true));
 
+      failedAt = 'creating your match entry';
       await userDoc.collection('connections').doc(profile.uid).set({
         'connectionId': connectionId,
         'matchPercent': matchPercent,
@@ -202,6 +207,7 @@ class _FeedBodyState extends State<_FeedBody> {
         'createdAt': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
 
+      failedAt = 'creating the other user match entry';
       await FirebaseFirestore.instance
           .collection('users')
           .doc(profile.uid)
@@ -221,7 +227,7 @@ class _FeedBodyState extends State<_FeedBody> {
       }
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('${error.code}: ${error.message ?? 'Unable to save swipe.'}'),
+          content: Text('Failed while ${failedAt}: ${error.code}'),
           duration: const Duration(seconds: 8),
         ),
       );
