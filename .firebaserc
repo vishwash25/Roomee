@@ -1,1 +1,6 @@
-{ "projects": { "default": "roomee-59456" } }
+{
+  "projects": {
+    "default": "roomee-59456",
+    "android": "roomee-13c66"
+  }
+}
