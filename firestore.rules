@@ -30,17 +30,19 @@ service cloud.firestore {
         && request.resource.data.createdAt == request.time;
     }
 
-    function validConnectionMirror(otherUid) {
-      return request.resource.data.keys().hasOnly([
+    function validConnectionMirror(ownerUid, otherUid) {
+      let counterpart = request.auth.uid == ownerUid ? otherUid : ownerUid;
+      return request.auth.uid in [ownerUid, otherUid]
+        && request.resource.data.keys().hasOnly([
           'connectionId', 'matchPercent', 'otherUid', 'createdAt'
         ])
-        && request.resource.data.connectionId == pairId(request.auth.uid, otherUid)
-        && request.resource.data.otherUid == otherUid
+        && request.resource.data.connectionId == pairId(ownerUid, otherUid)
+        && request.resource.data.otherUid == counterpart
         && request.resource.data.matchPercent is int
         && request.resource.data.matchPercent >= 0
         && request.resource.data.matchPercent <= 100
         && request.resource.data.createdAt == request.time
-        && mutualLikes(request.auth.uid, otherUid);
+        && mutualLikes(ownerUid, otherUid);
     }
 
     function validMainConnection(connectionId) {
@@ -124,7 +126,7 @@ service cloud.firestore {
         // A mirrored connection can only be written after both users
         // have independently liked each other.
         allow create, update: if signedIn()
-          && validConnectionMirror(otherUid);
+          && validConnectionMirror(uid, otherUid);
 
         // Either side can remove their own copy when un-connecting.
         allow delete: if signedIn()
