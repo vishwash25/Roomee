@@ -86,13 +86,18 @@ service cloud.firestore {
         && request.resource.data.answers is map
         && request.resource.data.onboardingComplete is bool;
 
+      // On updates, restrict which fields may change rather than restricting
+      // every field already present in legacy profile documents. This lets
+      // existing users complete onboarding while preventing edits to unknown
+      // legacy fields. The client must remove any legacy email field.
       allow update: if signedIn()
         && request.auth.uid == uid
         && request.resource.data.uid == uid
-        && request.resource.data.keys().hasOnly([
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'uid', 'name', 'city', 'answers', 'onboardingComplete',
-          'createdAt', 'updatedAt'
+          'createdAt', 'updatedAt', 'email'
         ])
+        && !request.resource.data.keys().hasAny(['email'])
         && request.resource.data.name is string
         && request.resource.data.city is string
         && request.resource.data.answers is map
