@@ -110,8 +110,10 @@ service cloud.firestore {
         // individual swipe addressed to them, for mutual-like detection.
         allow get: if signedIn()
           && (request.auth.uid == uid
-              || (request.auth.uid == otherUid
-                  && resource.data.targetUid == request.auth.uid));
+              // A target may check only the swipe document whose ID is their
+              // own UID. This must also work when that document does not yet
+              // exist, so do not inspect resource.data here.
+              || request.auth.uid == otherUid);
         allow list: if signedIn() && request.auth.uid == uid;
 
         allow create, update: if signedIn()
