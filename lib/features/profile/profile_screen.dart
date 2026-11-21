@@ -73,6 +73,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
         'name': name,
         'city': city,
+        'email': FieldValue.delete(),
         'updatedAt': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
       await user.updateDisplayName(name);
