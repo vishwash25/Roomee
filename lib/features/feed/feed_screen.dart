@@ -213,12 +213,17 @@ class _FeedBodyState extends State<_FeedBody> {
             'otherUid': currentUid,
             'createdAt': FieldValue.serverTimestamp(),
           }, SetOptions(merge: true));
-    } on FirebaseException catch (error) {
+    } on FirebaseException catch (error, stackTrace) {
+      debugPrint('ROomee swipe Firestore error: code=${error.code}, message=${error.message}');
+      debugPrintStack(stackTrace: stackTrace);
       if (!mounted) {
         return;
       }
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(error.message ?? 'Unable to save swipe.')),
+        SnackBar(
+          content: Text('${error.code}: ${error.message ?? 'Unable to save swipe.'}'),
+          duration: const Duration(seconds: 8),
+        ),
       );
     }
   }
