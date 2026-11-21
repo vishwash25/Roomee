@@ -1,0 +1,183 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function pairId(a, b) {
+      return a < b ? a + '_' + b : b + '_' + a;
+    }
+
+    function mutualLikes(a, b) {
+      return a != b
+        && exists(/databases/$(database)/documents/users/$(a)/swipes/$(b))
+        && exists(/databases/$(database)/documents/users/$(b)/swipes/$(a))
+        && get(/databases/$(database)/documents/users/$(a)/swipes/$(b)).data.direction == 'like'
+        && get(/databases/$(database)/documents/users/$(b)/swipes/$(a)).data.direction == 'like';
+    }
+
+    function validSwipe(otherUid) {
+      return request.resource.data.keys().hasOnly([
+          'direction', 'matchPercent', 'targetUid', 'createdAt'
+        ])
+        && request.resource.data.targetUid == otherUid
+        && request.resource.data.direction in ['like', 'pass']
+        && request.resource.data.matchPercent is int
+        && request.resource.data.matchPercent >= 0
+        && request.resource.data.matchPercent <= 100
+        && request.resource.data.createdAt == request.time;
+    }
+
+    function validConnectionMirror(otherUid) {
+      return request.resource.data.keys().hasOnly([
+          'connectionId', 'matchPercent', 'otherUid', 'createdAt'
+        ])
+        && request.resource.data.connectionId == pairId(request.auth.uid, otherUid)
+        && request.resource.data.otherUid == otherUid
+        && request.resource.data.matchPercent is int
+        && request.resource.data.matchPercent >= 0
+        && request.resource.data.matchPercent <= 100
+        && request.resource.data.createdAt == request.time
+        && mutualLikes(request.auth.uid, otherUid);
+    }
+
+    function validMainConnection(connectionId) {
+      return request.resource.data.keys().hasOnly([
+          'members', 'matchPercent', 'createdAt'
+        ])
+        && request.resource.data.members is list
+        && request.resource.data.members.size() == 2
+        && request.resource.data.members[0] != request.resource.data.members[1]
+        && request.resource.data.members.hasAny([request.auth.uid])
+        && connectionId == pairId(
+          request.resource.data.members[0],
+          request.resource.data.members[1]
+        )
+        && request.resource.data.matchPercent is int
+        && request.resource.data.matchPercent >= 0
+        && request.resource.data.matchPercent <= 100
+        && request.resource.data.createdAt == request.time
+        && mutualLikes(
+          request.resource.data.members[0],
+          request.resource.data.members[1]
+        );
+    }
+
+    match /users/{uid} {
+      // Profiles are visible only to signed-in users after onboarding.
+      // A user can always read their own profile, including during onboarding.
+      allow get: if signedIn()
+        && (request.auth.uid == uid || resource.data.onboardingComplete == true);
+      allow list: if signedIn() && resource.data.onboardingComplete == true;
+
+      allow create: if signedIn()
+        && request.auth.uid == uid
+        && request.resource.data.uid == uid
+        && !request.resource.data.keys().hasAny(['email'])
+        && request.resource.data.keys().hasOnly([
+          'uid', 'name', 'city', 'answers', 'onboardingComplete',
+          'createdAt', 'updatedAt'
+        ])
+        && request.resource.data.name is string
+        && request.resource.data.city is string
+        && request.resource.data.answers is map
+        && request.resource.data.onboardingComplete is bool;
+
+      allow update: if signedIn()
+        && request.auth.uid == uid
+        && request.resource.data.uid == uid
+        && request.resource.data.keys().hasOnly([
+          'uid', 'name', 'city', 'answers', 'onboardingComplete',
+          'createdAt', 'updatedAt', 'email'
+        ])
+        // Existing legacy email values cannot be changed by a client.
+        && (!request.resource.data.keys().hasAny(['email'])
+            || request.resource.data.email == resource.data.email)
+        && request.resource.data.name is string
+        && request.resource.data.city is string
+        && request.resource.data.answers is map
+        && request.resource.data.onboardingComplete is bool;
+
+      allow delete: if false;
+
+      match /swipes/{otherUid} {
+        // The owner can see their history. A target can fetch only the
+        // individual swipe addressed to them, for mutual-like detection.
+        allow get: if signedIn()
+          && (request.auth.uid == uid
+              || (request.auth.uid == otherUid
+                  && resource.data.targetUid == request.auth.uid));
+        allow list: if signedIn() && request.auth.uid == uid;
+
+        allow create, update: if signedIn()
+          && request.auth.uid == uid
+          && otherUid != uid
+          && validSwipe(otherUid);
+        allow delete: if signedIn() && request.auth.uid == uid;
+      }
+
+      match /connections/{otherUid} {
+        allow get, list: if signedIn() && request.auth.uid == uid;
+
+        // A mirrored connection can only be written after both users
+        // have independently liked each other.
+        allow create, update: if signedIn()
+          && validConnectionMirror(otherUid);
+
+        // Either side can remove their own copy when un-connecting.
+        allow delete: if signedIn()
+          && (request.auth.uid == uid || request.auth.uid == otherUid);
+      }
+
+      match /undoQueue/{otherUid} {
+        allow get, list: if signedIn() && request.auth.uid == uid;
+        allow create, update: if signedIn()
+          && request.auth.uid == uid
+          && request.resource.data.keys().hasOnly(['otherUid', 'createdAt'])
+          && request.resource.data.otherUid == otherUid
+          && otherUid != uid
+          && request.resource.data.createdAt == request.time;
+        allow delete: if signedIn() && request.auth.uid == uid;
+      }
+    }
+
+    match /connections/{connectionId} {
+      allow get: if signedIn()
+        && resource.data.members is list
+        && resource.data.members.hasAny([request.auth.uid]);
+      allow list: if false;
+
+      allow create, update: if signedIn()
+        && validMainConnection(connectionId);
+
+      allow delete: if signedIn()
+        && resource.data.members is list
+        && resource.data.members.hasAny([request.auth.uid]);
+
+      match /messages/{messageId} {
+        function isConnectionMember() {
+          return signedIn()
+            && exists(/databases/$(database)/documents/connections/$(connectionId))
+            && get(/databases/$(database)/documents/connections/$(connectionId))
+              .data.members.hasAny([request.auth.uid]);
+        }
+
+        allow get, list: if isConnectionMember();
+
+        allow create: if isConnectionMember()
+          && request.resource.data.keys().hasOnly([
+            'senderId', 'text', 'createdAt'
+          ])
+          && request.resource.data.senderId == request.auth.uid
+          && request.resource.data.text is string
+          && request.resource.data.text.size() > 0
+          && request.resource.data.text.size() <= 4000
+          && request.resource.data.createdAt == request.time;
+
+        allow update, delete: if false;
+      }
+    }
+  }
+}
