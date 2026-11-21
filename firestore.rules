@@ -31,13 +31,12 @@ service cloud.firestore {
     }
 
     function validConnectionMirror(ownerUid, otherUid) {
-      let counterpart = request.auth.uid == ownerUid ? otherUid : ownerUid;
       return request.auth.uid in [ownerUid, otherUid]
         && request.resource.data.keys().hasOnly([
           'connectionId', 'matchPercent', 'otherUid', 'createdAt'
         ])
         && request.resource.data.connectionId == pairId(ownerUid, otherUid)
-        && request.resource.data.otherUid == counterpart
+        && request.resource.data.otherUid == otherUid
         && request.resource.data.matchPercent is int
         && request.resource.data.matchPercent >= 0
         && request.resource.data.matchPercent <= 100
@@ -92,11 +91,8 @@ service cloud.firestore {
         && request.resource.data.uid == uid
         && request.resource.data.keys().hasOnly([
           'uid', 'name', 'city', 'answers', 'onboardingComplete',
-          'createdAt', 'updatedAt', 'email'
+          'createdAt', 'updatedAt'
         ])
-        // Existing legacy email values cannot be changed by a client.
-        && (!request.resource.data.keys().hasAny(['email'])
-            || request.resource.data.email == resource.data.email)
         && request.resource.data.name is string
         && request.resource.data.city is string
         && request.resource.data.answers is map
