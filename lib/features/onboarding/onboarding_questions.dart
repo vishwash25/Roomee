@@ -193,6 +193,7 @@ class _OnboardingQuestionsScreenState extends State<OnboardingQuestionsScreen> {
 
       await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
         'uid': user.uid,
+        'email': FieldValue.delete(),
         'name': widget.name,
         'city': widget.city,
         'answers': answers,
