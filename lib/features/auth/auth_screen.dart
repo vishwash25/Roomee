@@ -1,5 +1,6 @@
-import 'package:firebase_auth/firebase_auth.dart';
+﻿import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:roomee/theme/app_theme.dart';
 
 class AuthScreen extends StatefulWidget {
@@ -60,6 +61,41 @@ class _AuthScreenState extends State<AuthScreen> {
       setState(() {
         _errorMessage = error.message ?? 'Authentication failed.';
       });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+
+  Future<void> _signInWithGoogle() async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      final googleProvider = GoogleAuthProvider()
+        ..setCustomParameters({
+          'prompt': 'select_account',
+        });
+
+      await FirebaseAuth.instance.signInWithPopup(googleProvider);
+    } on FirebaseAuthException catch (error) {
+      if (mounted) {
+        setState(() {
+          _errorMessage = error.message ?? 'Google sign-in failed.';
+        });
+      }
+    } catch (error) {
+      if (mounted) {
+        setState(() {
+          _errorMessage = 'Google sign-in failed: $error';
+        });
+      }
     } finally {
       if (mounted) {
         setState(() {
@@ -160,6 +196,25 @@ class _AuthScreenState extends State<AuthScreen> {
                         : Text(_isLogin ? 'Sign in' : 'Create account'),
                   ),
                 ),
+                if (kIsWeb && _isLogin) ...[
+                  const SizedBox(height: 20),
+                  const Center(child: Text('OR')),
+                  const SizedBox(height: 20),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: _isLoading ? null : _signInWithGoogle,
+                      icon: const Icon(Icons.g_mobiledata, size: 28),
+                      label: const Text('Continue with Google'),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 12),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
@@ -194,3 +249,4 @@ class _AuthScreenState extends State<AuthScreen> {
     );
   }
 }
+
