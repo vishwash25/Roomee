@@ -207,9 +207,11 @@ class _OnboardingQuestionsScreenState extends State<OnboardingQuestionsScreen> {
       if (mounted) {
         Navigator.of(context).popUntil((route) => route.isFirst);
       }
-    } on FirebaseException catch (error) {
+    } on FirebaseException catch (error, stackTrace) {
+      debugPrint('ROomee onboarding Firestore error: code=${error.code}, message=${error.message}');
+      debugPrintStack(stackTrace: stackTrace);
       setState(() {
-        _errorMessage = error.message ?? 'Failed to save your answers.';
+        _errorMessage = '${error.code}: ${error.message ?? 'Failed to save your answers.'}';
       });
     } finally {
       if (mounted) {
